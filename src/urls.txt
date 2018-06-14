@@ -1,2 +1,2 @@
-https://github.com/luis/doa17-application.git
-https://github.com/luis/doa17-infrastructure.git
+https://github.com/mxlulop/doa17-application.git
+https://github.com/mxlulop/doa17-infrastructure.git
