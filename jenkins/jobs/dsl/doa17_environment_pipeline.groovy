@@ -44,9 +44,35 @@ doa17LaunchEnvironment.with{
     maskPasswords()
   }
   label("docker")
+  scm{
+    git{
+      remote{
+        url(infrastructureRepository)
+        credentials("adop-jenkins-master")
+      }
+      branch("*/master")
+    }
+  }
     steps {
     shell('''
 set +x
+
+export AWS_DEFAULT_REGION=$AWS_REGION
+echo "[INFO] Default region is set to $AWS_DEFAULT_REGION"
+
+echo "[INFO] Creating DevopsWorkshop-${ENVIRONMENT_NAME} Stack"
+aws cloudformation create-stack --stack-name DevopsWorkshop-${ENVIRONMENT_NAME} --template-body file:///${WORKSPACE}/03-aws-devops-workshop-environment-setup.template --capabilities CAPABILITY_IAM \
+--parameters  ParameterKey=EnvironmentName,ParameterValue=$ENVIRONMENT_NAME \
+              ParameterKey=WebAppInstanceProfile,ParameterValue=$WEB_APP_PROFILE \
+              ParameterKey=WebAppSG,ParameterValue=$WEB_APP_SG \
+              ParameterKey=publicSubnet01,ParameterValue=$PUBLIC_SUBNET
+
+echo "[INFO] Wating for DevopsWorkshop-${ENVIRONMENT_NAME} Stack"
+aws cloudformation wait stack-create-complete --stack-name DevopsWorkshop-${ENVIRONMENT_NAME}
+echo "[INFO] DevopsWorkshop-${ENVIRONMENT_NAME} Stack Created"
+
+echo "[INFO] Creating Code Build Project"
+aws codebuild create-project --cli-input-json file://${WORKSPACE}/create-project.json
 
 set -x'''.stripMargin()
     )
@@ -71,41 +97,25 @@ doa17CreateApplication.with{
     env('PROJECT_NAME', projectFolderName)
   }
   parameters{
-    stringParam("KEY",'Description',"Value")
+    stringParam("AWS_REGION",'',"Default AWS Region")
+
   }
   wrappers {
     preBuildCleanup()
     maskPasswords()
   }
   label("docker")
-   scm{
-    git{
-      remote{
-        url(infrastructureRepository)
-        credentials("adop-jenkins-master")
-      }
-      branch("*/master")
-    }
-  }
+   
     steps {
     shell('''
 set +x
+
 export AWS_DEFAULT_REGION=$AWS_REGION
 echo "[INFO] Default region is set to $AWS_DEFAULT_REGION"
 
-echo "[INFO] Creating DevopsWorkshop-${ENVIRONMENT_NAME} Stack"
-aws cloudformation create-stack --stack-name DevopsWorkshop-${ENVIRONMENT_NAME} --template-body file:///${WORKSPACE}/03-aws-devops-workshop-environment-setup.template --capabilities CAPABILITY_IAM \
---parameters  ParameterKey=EnvironmentName,ParameterValue=$ENVIRONMENT_NAME \
-              ParameterKey=WebAppInstanceProfile,ParameterValue=$WEB_APP_PROFILE \
-              ParameterKey=WebAppSG,ParameterValue=$WEB_APP_SG \
-              ParameterKey=publicSubnet01,ParameterValue=$PUBLIC_SUBNET
+echo "[INFO] Creating Code Deploy Application ${ENVIRONMENT_NAME}-WebApp"
+aws deploy create-application --application-name ${ENVIRONMENT_NAME}-WebApp
 
-echo "[INFO] Wating for DevopsWorkshop-${ENVIRONMENT_NAME} Stack"
-aws cloudformation wait stack-create-complete --stack-name DevopsWorkshop-${ENVIRONMENT_NAME}
-echo "[INFO] DevopsWorkshop-${ENVIRONMENT_NAME} Stack Created"
-
-echo "[INFO] Creating Code Build Project"
-aws codebuild create-project --cli-input-json file://${WORKSPACE}/create-project.json
 set -x'''.stripMargin()
     )
   }
@@ -129,7 +139,7 @@ doa17CreateDevelopmentGroup.with{
     env('PROJECT_NAME', projectFolderName)
   }
   parameters{
-    stringParam("KEY",'Description',"Value")
+    stringParam("AWS_REGION",'',"Default AWS Region")
   }
   wrappers {
     preBuildCleanup()
@@ -139,6 +149,12 @@ doa17CreateDevelopmentGroup.with{
     steps {
     shell('''
 set +x
+
+export AWS_DEFAULT_REGION=$AWS_REGION
+echo "[INFO] Default region is set to $AWS_DEFAULT_REGION"
+
+echo "[INFO] Creating Code Deploy Deployment Group ${ENVIRONMENT_NAME}-DevWebApp"
+aws deploy create-deployment-group --application-name ${ENVIRONMENT_NAME}-WebApp  --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name ${ENVIRONMENT_NAME}-DevWebApp --ec2-tag-filters Key=Name,Value=${ENVIRONMENT_NAME}-DevWebApp,Type=KEY_AND_VALUE --service-role-arn ${CODE_DEPLOY_ARN}
 
 set -x'''.stripMargin()
     )
@@ -163,7 +179,7 @@ doa17CreateProductionGroup.with{
     env('PROJECT_NAME', projectFolderName)
   }
   parameters{
-    stringParam("KEY",'Description',"Value")
+    stringParam("AWS_REGION",'',"Default AWS Region")
   }
   wrappers {
     preBuildCleanup()
@@ -173,6 +189,13 @@ doa17CreateProductionGroup.with{
     steps {
     shell('''
 set +x
+
+export AWS_DEFAULT_REGION=$AWS_REGION
+echo "[INFO] Default region is set to $AWS_DEFAULT_REGION"
+
+echo "[INFO] Creating Code Deploy Deployment Group ${ENVIRONMENT_NAME}-ProdWebApp"
+aws deploy create-deployment-group --application-name ${ENVIRONMENT_NAME}-WebApp  --deployment-config-name CodeDeployDefault.OneAtATime --deployment-group-name ${ENVIRONMENT_NAME}-ProdWebApp --ec2-tag-filters Key=Name,Value=${ENVIRONMENT_NAME}-ProdWebApp,Type=KEY_AND_VALUE --service-role-arn ${CODE_DEPLOY_ARN}
+
 
 set -x'''.stripMargin()
     )
